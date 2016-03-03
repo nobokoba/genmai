@@ -812,6 +812,11 @@ func (db *DB) hasPKTag(field *reflect.StructField) bool {
 
 // isAutoIncrementable returns whether the struct field is integer.
 func (db *DB) isAutoIncrementable(field *reflect.StructField) bool {
+	for _, tag := range db.tagsFromField(field) {
+		if tag == "not_ai" {
+			return false
+		}
+	}
 	switch field.Type.Kind() {
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64:

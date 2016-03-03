@@ -263,6 +263,9 @@ func createTableString(name string, fields ...string) string {
 func createTableStringForStringPk(name string, fields ...string) string {
 	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (%s, %s)`, name, idFieldStrForStringPk(), strings.Join(fields, ","))
 }
+func createTableStringForNotAutoincrementPk(name string, fields ...string) string {
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (%s, %s)`, name, idFieldStrForNotAutoincrementPk(), strings.Join(fields, ","))
+}
 
 func boolStr(b bool) string {
 	switch os.Getenv("DB") {
@@ -306,6 +309,17 @@ func idFieldStrForStringPk() string {
 		return "id VARCHAR(255) PRIMARY KEY"
 	default:
 		return "id text PRIMARY KEY"
+	}
+}
+
+func idFieldStrForNotAutoincrementPk() string {
+	switch os.Getenv("DB") {
+	case "mysql":
+		return "id INTEGER PRIMARY KEY"
+	case "postgres":
+		return "id serial PRIMARY KEY"
+	default:
+		return "id integer PRIMARY KEY"
 	}
 }
 
@@ -1881,6 +1895,10 @@ func TestDB_Insert(t *testing.T) {
 		Id   string `db:"pk"`
 		Name string
 	}
+	type TestTableNotAutoincrementPk struct {
+		Id   int64 `db:"pk,not_ai"`
+		Name string
+	}
 
 	// test for single.
 	func() {
@@ -2067,6 +2085,37 @@ func TestDB_Insert(t *testing.T) {
 		}
 		actual := []interface{}{id, name}
 		expected := []interface{}{"stringkey", "test1"}
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf("Expect %v, but %v", expected, actual)
+		}
+	}()
+
+	// test for case that primary key is not autoincrement.
+	func() {
+		db, err := testDB()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, query := range []string{
+			`DROP TABLE IF EXISTS test_table_not_autoincrement_pk`,
+			createTableStringForStringPk("test_table_not_autoincrement_pk", "name text"),
+		} {
+			if _, err := db.db.Exec(query); err != nil {
+				t.Fatal(fmt.Errorf("%v: %s", err, query))
+			}
+		}
+		obj := &TestTableNotAutoincrementPk{Id: 50, Name: "test1"}
+		_, err = db.Insert(obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var id int64
+		var name string
+		if err := db.db.QueryRow(`SELECT * FROM test_table_not_autoincrement_pk`).Scan(&id, &name); err != nil {
+			t.Fatal(err)
+		}
+		actual := []interface{}{id, name}
+		expected := []interface{}{int64(50), "test1"}
 		if !reflect.DeepEqual(actual, expected) {
 			t.Errorf("Expect %v, but %v", expected, actual)
 		}
